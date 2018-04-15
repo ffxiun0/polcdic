@@ -1,0 +1,268 @@
+#!/usr/bin/env ruby
+
+# The MIT License (MIT)
+#
+# Copyright 2018 ffxiun0@gmail.com
+#
+# Permission is hereby granted, free of charge, to any person
+# obtaining a copy of this software and associated documentation files
+# (the "Software"), to deal in the Software without restriction,
+# including without limitation the rights to use, copy, modify, merge,
+# publish, distribute, sublicense, and/or sell copies of the Software,
+# and to permit persons to whom the Software is furnished to do so,
+# subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be
+# included in all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+# EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+# MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+# NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
+# BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
+# ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+# CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+
+require 'optparse'
+require 'securerandom'
+
+def main()
+  options = get_options(ARGV)
+
+  write_header(STDOUT, options)
+  write_entries(STDIN, STDOUT)
+  write_footer(STDOUT)
+end
+
+def get_options(argv)
+  options = {
+    :guid => SecureRandom.uuid.upcase,
+    :language => 'ja-jp',
+    :version => '1',
+    :sourceurl => '',
+    :shortname => '名称未設定の辞書',
+    :description => '',
+    :copyright => '',
+  }
+
+  parser = OptionParser.new
+  parser.on('--guid VAL')
+  parser.on('--language VAL')
+  parser.on('--version VAL')
+  parser.on('--sourceurl VAL')
+  parser.on('--shortname VAL')
+  parser.on('--longname VAL')
+  parser.on('--description VAL')
+  parser.on('--copyright VAL')
+  parser.on('--config VAL')
+  parser.parse!(argv, into: options)
+
+  read_config(options)
+
+  if options[:longname].nil? then
+    options[:longname] = options[:shortname]
+  end
+
+  return options
+end
+
+def read_config(options)
+  return if options[:config].nil?
+
+  File.open(options[:config]) {|f|
+    f.each_line {|line|
+      line.scan(/^\s*(\w+)\s*=(.+)/) {|key, value|
+        options[key.strip.downcase.intern] = value.strip
+      }
+    }
+  }
+end
+
+def xml_escape_options(options)
+  result = {}
+
+  options.each {|key, value|
+    result[key] = value.encode(:xml => :text)
+  }
+
+  return result
+end
+
+def write_header(ofs, options)
+  o = xml_escape_options(options)
+
+  ofs.print <<EOF
+<?xml version="1.0" encoding="utf-8"?>
+<dctx:Dictionary xmlns:dctx="http://www.microsoft.com/ime/dctx">
+  <dctx:DictionaryHeader>
+    <dctx:DictionaryGUID>{#{o[:guid]}}</dctx:DictionaryGUID>
+    <dctx:DictionaryLanguage>#{o[:language]}</dctx:DictionaryLanguage>
+    <dctx:DictionaryVersion>#{o[:version]}</dctx:DictionaryVersion>
+    <dctx:DictionaryInfo Language="#{o[:language]}">
+      <dctx:ShortName>#{o[:shortname]}</dctx:ShortName>
+      <dctx:LongName>#{o[:longname]}</dctx:LongName>
+      <dctx:Description>#{o[:description]}</dctx:Description>
+      <dctx:Copyright>#{o[:copyright]}</dctx:Copyright>
+    </dctx:DictionaryInfo>
+    <dctx:SourceURL>#{o[:sourceurl]}</dctx:SourceURL>
+    <dctx:CommentInsertion>false</dctx:CommentInsertion>
+  </dctx:DictionaryHeader>
+EOF
+end
+
+def write_entries(ifs, ofs)
+  ifs.each_line {|line|
+    (input, output, speech) = line.split(/\t/)
+    speech_sym = $speech_map[speech.strip]
+
+    if speech_sym.nil? then
+      STDERR.puts "error: unknown part of speech '#{input}:#{output}:#{speech}'."
+    else
+      write_entry(ofs, input, output, speech_sym)
+    end
+  }
+end
+
+def write_entry(ofs, input, output, part_of_speech)
+  return if input.nil? or input.empty?
+  return if output.nil? or output.empty?
+  return if part_of_speech.nil? or part_of_speech.empty?
+
+  input = input.encode(:xml => :text)
+  output = output.encode(:xml => :text)
+  part_of_speech = part_of_speech.encode(:xml => :text)
+
+  ofs.print <<EOF
+  <dctx:DictionaryEntry>
+    <dctx:InputString>#{input}</dctx:InputString>
+    <dctx:OutputString>#{output}</dctx:OutputString>
+    <dctx:PartOfSpeech>#{part_of_speech}</dctx:PartOfSpeech>
+  </dctx:DictionaryEntry>
+EOF
+end
+
+def write_footer(ofs)
+  ofs.print <<EOF
+</dctx:Dictionary>
+EOF
+end
+
+$speech_map = {
+  # オープン拡張辞書
+  '普通名詞' => 'Noun',
+  'さ変名詞' => 'Noun-Sa',
+  'ざ変名詞' => 'Noun-Za',
+  '形動名詞' => 'Noun-Adjectival',
+  '副詞的名詞' => 'Noun-Adverb',
+  'さ変形動名詞' => 'Noun-Sa-Adjectival',
+  '人名' => 'Name-Personal',
+  '姓' => 'Name-Family',
+  '名' => 'Name-Given',
+  '地名' => 'Place',
+  '県' => 'Place-Prefecture',
+  '郡' => 'Place-County',
+  '区' => 'Place-Ward',
+  '市' => 'Place-City',
+  '町' => 'Place-Town',
+  '町1' => 'Place-Town-Machi',
+  '町2' => 'Place-Town-Cho',
+  '村' => 'Place-Village',
+  '村1' => 'Place-Village-Mura',
+  '村2' => 'Place-Village-Son',
+  '駅' => 'Place-Station',
+  '固有名詞' => 'Noun-Proper',
+  '社名' => 'Name-Company',
+  '組織' => 'Name-Organization',
+  '建築物' => 'Name-Construction',
+  '代名詞' => 'Pronoun',
+  '数' => 'Number',
+  'あわ行五段' => 'Verb-5-AW',
+  'か行五段' => 'Verb-5-K',
+  'が行五段' => 'Verb-5-G',
+  'さ行五段' => 'Verb-5-S',
+  'た行五段' => 'Verb-5-T',
+  'な行五段' => 'Verb-5-N',
+  'ば行五段' => 'Verb-5-B',
+  'ま行五段' => 'Verb-5-M',
+  'ら行五段' => 'Verb-5-R',
+  'あわ行う音便' => 'Verb-EuphonyU-AW',
+  'か行促音便' => 'Verb-Euphony-K',
+  'ら行変格' => 'Verb-Irregular-R',
+  '一段動詞' => 'Verb-1',
+  '形容詞' => 'Adjective',
+  '形容詞ガル' => 'Adjective-Garu',
+  '形容詞メ' => 'Adjective-Me',
+  '形容詞シュウ' => 'Adjective-Syu',
+  '形容動詞' => 'AdjectivalNoun',
+  '形容動詞ノ' => 'AdjectivalNoun-No',
+  '形容動詞タル' => 'AdjectivalNoun-Taru',
+  '副詞' => 'Adverb',
+  '副詞さ変' => 'Adverb-Suru',
+  '副詞ニ' => 'Adverb-Ni',
+  '副詞ナ' => 'Adverb-Na',
+  '副詞ダ' => 'Adverb-Da',
+  '副詞ト' => 'Adverb-To',
+  '副詞トさ変' => 'Adverb-Tosuru',
+  '連体詞' => 'Adnominal',
+  '接続詞' => 'Conjunction',
+  '感動詞' => 'Interjection',
+  '接頭語' => 'Prefix',
+  '接尾語' => 'Suffix',
+  '人名接尾語' => 'Suffix-PersonalName',
+  '後置助数詞' => 'Suffix-Number',
+  '前置助数詞' => 'Prefix-Number',
+  '県接尾語' => 'Suffix-Prefecture',
+  '郡接尾語' => 'Suffix-County',
+  '区接尾語' => 'Suffix-Ward',
+  '市接尾語' => 'Suffix-City',
+  '町1接尾語' => 'Suffix-Town1',
+  '町2接尾語' => 'Suffix-Town2',
+  '村1接尾語' => 'Suffix-Village1',
+  '村2接尾語' => 'Suffix-Village2',
+  '単漢字' => 'Character',
+  '記号' => 'Symbol',
+  '慣用句' => 'Idiom',
+  '短縮よみ' => 'ShortCut',
+  '顔文字' => 'Emoticon',
+
+  # IMEとの差分
+  'その他自立語' => 'Noun-Proper',
+  '助数詞' => 'Suffix-Number',
+  '姓名接頭語' => 'Prefix',
+  '姓名接尾語' => 'Suffix-PersonalName',
+  '地名その他' => 'Place',
+  '地名接頭語' => 'Prefix',
+  '地名接尾語' => 'Suffix',
+  '独立語' => 'Noun-Proper',
+  '名詞' => 'Noun',
+  #'抑制単語' => '',
+
+  # Google日本語入力との差分
+  #'アルファベット' => '',
+  #'サジェストのみ' => '',
+  #'句読点' => '',
+  #'終助詞' => '',
+  '接尾一般' => 'Suffix',
+  '接尾人名' => 'Suffix-PersonalName',
+  '接尾地名' => 'Suffix',
+  '動詞カ行五段' => 'Verb-5-K',
+  '動詞ガ行五段' => 'Verb-5-G',
+  #'動詞カ変' => '',
+  '動詞サ行五段' => 'Verb-5-S',
+  #'動詞サ変' => '',
+  #'動詞ザ変' => '',
+  '動詞タ行五段' => 'Verb-5-T',
+  '動詞ナ行五段' => 'Verb-5-N',
+  '動詞バ行五段' => 'Verb-5-B',
+  #'動詞ハ行四段' => '',
+  '動詞マ行五段' => 'Verb-5-M',
+  '動詞ラ行五段' => 'Verb-5-R',
+  '動詞ラ変' => 'Verb-Irregular-R',
+  #'動詞ワ行五段' => '',
+  '動詞一段' => 'Verb-1',
+  '名詞サ変' => 'Noun-Sa',
+  '名詞形動' => 'Noun-Adjectival',
+}
+
+main()
