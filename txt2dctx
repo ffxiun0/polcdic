@@ -30,9 +30,11 @@ require 'securerandom'
 def main()
   options = get_options(ARGV)
 
-  write_header(STDOUT, options)
-  write_entries(STDIN, STDOUT)
-  write_footer(STDOUT)
+  alt_write_to(options[:outfile]) {|ofs|
+    write_header(ofs, options)
+    write_entries(ofs, ARGV)
+    write_footer(ofs)
+  }
 end
 
 def get_options(argv)
@@ -56,6 +58,7 @@ def get_options(argv)
   parser.on('--description VAL')
   parser.on('--copyright VAL')
   parser.on('--config VAL')
+  parser.on('-o VAL', '--outfile VAL')
   parser.parse!(argv, into: options)
 
   read_config(options)
@@ -77,6 +80,31 @@ def read_config(options)
       }
     }
   }
+end
+
+def alt_write_to(file, &block)
+  if file.nil? then
+    block.call(STDOUT)
+  else
+    File.open(file, 'w') {|f|
+      begin
+        block.call(f)
+      rescue
+        File.unlink(file)
+        raise
+      end
+    }
+  end
+end
+
+def alt_read_from(files, &block)
+  if files.nil? or files.empty? then
+    block.call(STDIN)
+  else
+    files.each {|file|
+      File.open(file) {|f| block.call(f) }
+    }
+  end
 end
 
 def xml_escape_options(options)
@@ -111,16 +139,18 @@ def write_header(ofs, options)
 EOF
 end
 
-def write_entries(ifs, ofs)
-  ifs.each_line {|line|
-    (input, output, speech) = line.split(/\t/)
-    speech_sym = $speech_map[speech.strip]
+def write_entries(ofs, infiles)
+  alt_read_from(infiles) {|ifs|
+    ifs.each_line {|line|
+      (input, output, speech) = line.split(/\t/)
 
-    if speech_sym.nil? then
-      STDERR.puts "error: unknown part of speech '#{input}:#{output}:#{speech}'."
-    else
-      write_entry(ofs, input, output, speech_sym)
-    end
+      speech_sym = $speech_map[speech.strip]
+      if speech_sym.nil? then
+        STDERR.puts "error: unknown part of speech '#{input}:#{output}:#{speech}'."
+      else
+        write_entry(ofs, input, output, speech_sym)
+      end
+    }
   }
 end
 

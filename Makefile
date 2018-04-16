@@ -15,7 +15,7 @@ clean:
 	$(RM) $(DCTXC)
 
 %.dctx: %.txt %.conf
-	$(TXT2DCTX) --config $*.conf < $< > $@ || $(RM) $@
+	$(TXT2DCTX) -o $@ --config $*.conf $<
 
 %.dctxc: %.dctx
 	$(MAKECAB) $< $@
