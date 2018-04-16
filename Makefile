@@ -3,7 +3,7 @@
 TXT2DCTX=./txt2dctx
 MAKECAB=makecab
 
-DCTX=polcdic-kaomoji.dctx
+DCTX=polcdic-kaomoji.dctx polcdic-ff11emote.dctx
 DCTXC=$(DCTX:.dctx=.dctxc)
 
 all: $(DCTX)
