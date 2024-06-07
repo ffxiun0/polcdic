@@ -210,8 +210,8 @@
 しゃどう	/sitchair 8	短縮よみ
 じゃんぷ	/jump	短縮よみ
 すわる	/sit	短縮よみ
-ちょこぼ	/sitchair 6	短縮よみ
 ちょこぼ	/sitchair 11	短縮よみ
+ちょこぼ	/sitchair 6	短縮よみ
 のーぶる	/sitchair 4	短縮よみ
 ばす	/sitchair 2	短縮よみ
 べんち	/sitchair 9	短縮よみ
