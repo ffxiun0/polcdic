@@ -1,6 +1,7 @@
 .SUFFIXES: .txt .conf .dctx .dctxc
 
-TXT2DCTX=./txt2dctx
+RUBY=ruby
+TXT2DCTX=$(RUBY) txt2dctx.rb
 MAKECAB=makecab
 
 DIC=polcdic-kaomoji.txt polcdic-ff11emote.txt
